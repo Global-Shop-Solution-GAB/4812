@@ -1,0 +1,394 @@
+Program.Sub.ScreenSU.Start
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+	V.Global.bLoad.Declare
+	V.Global.sParent.Declare
+	V.Global.sComponent.Declare
+	V.Global.sOrderNo.Declare
+	V.Global.sRecordNo.Declare
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+	F.Intrinsic.Control.Try
+	V.Local.sError.Declare
+	
+	F.Intrinsic.Control.SelectCase(V.Caller.Hook)
+		F.Intrinsic.Control.Case(17301)
+			'Update the Order_No in GAB_4812_BOM_CFGSUBS to move Group Comments over the SO
+			F.Intrinsic.Control.CallSub(UpdateOrderNo)
+		
+		F.Intrinsic.Control.Case(11560)
+			'Rename Script buttons 2 & 3
+			V.Passed.000202.Set("UpdateCabinets")
+			V.Passed.000203.Set("Gen WOs")
+			
+		F.Intrinsic.Control.Case(11920)
+			'Update Cabinets by summing component pricing to the Top Level parent and remove the component lines
+			F.Intrinsic.String.LPad(V.Passed.000003,"0",7,V.Global.sOrderNo)
+			F.Intrinsic.Control.CallSub(UpdateCabinets)
+			
+		F.Intrinsic.Control.Case(11930)
+			'Generate WOs for all lines that do not already have WOs created for them
+			F.Intrinsic.String.LPad(V.Passed.000003,"0",7,V.Global.sOrderNo)
+			F.Intrinsic.Control.CallSub(GenerateWOs)
+		
+		F.Intrinsic.Control.Case(12010)
+			'Rename Script button 3
+			V.Passed.000210.Set("Gen WO")
+			'Lock/Hide CORE Gen WO Button
+			F.Intrinsic.UI.ChangeCallerProperty(V.Passed.000061,"Lock",1)
+			F.Intrinsic.UI.ChangeCallerProperty(V.Passed.000061,"Hide",1)
+			'Lock/Hide User Field 2 Label
+			F.Intrinsic.UI.ChangeCallerProperty(V.Passed.000088,"Lock",1)
+			F.Intrinsic.UI.ChangeCallerProperty(V.Passed.000088,"Hide",1)
+			'Lock/Hide User Field 2 Textbox
+			F.Intrinsic.UI.ChangeCallerProperty(V.Passed.000080,"Lock",1)
+			F.Intrinsic.UI.ChangeCallerProperty(V.Passed.000080,"Hide",1)
+			'Lock/Hide User Field 2 Browser
+			F.Intrinsic.UI.ChangeCallerProperty(V.Passed.000081,"Lock",1)
+			F.Intrinsic.UI.ChangeCallerProperty(V.Passed.000081,"Hide",1)
+			
+		F.Intrinsic.Control.Case(12430)
+			'Generate single WO for the selected line if the WO does not already exist
+			F.Intrinsic.String.LPad(V.Passed.000060,"0",7,V.Global.sOrderNo)
+			F.Intrinsic.String.LPad(V.Passed.000051,"0",3,V.Global.sRecordNo)
+			F.Intrinsic.String.Build("{0}0",V.Global.sRecordNo,V.Global.sRecordNo)
+			F.Intrinsic.Control.CallSub(GenerateWO)
+			
+		F.Intrinsic.Control.Case(10260)
+			'Lock/Hide User Field 2 Label
+			F.Intrinsic.UI.ChangeCallerProperty(V.Passed.000027,"Lock",1)
+			F.Intrinsic.UI.ChangeCallerProperty(V.Passed.000027,"Hide",1)
+			'Lock/Hide User Field 2 Textbox
+			F.Intrinsic.UI.ChangeCallerProperty(V.Passed.000023,"Lock",1)
+			F.Intrinsic.UI.ChangeCallerProperty(V.Passed.000023,"Hide",1)
+			'Lock/Hide User Field 2 Browser
+			F.Intrinsic.UI.ChangeCallerProperty(V.Passed.000112-BROWSE-3,"Lock",1)
+			F.Intrinsic.UI.ChangeCallerProperty(V.Passed.000112-BROWSE-3,"Hide",1)
+			
+	F.Intrinsic.Control.EndSelect
+	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.UpdateCabinets.Start
+	F.Intrinsic.Control.Try
+	V.Local.sError.Declare
+
+	V.Local.sSQL.Declare
+	V.Local.iCnt.Declare
+	V.Local.iCnt2.Declare
+	
+	F.ODBC.Connection!con.OpenCompanyConnection(500)
+	
+	F.Intrinsic.UI.InvokeWaitDialog("Updating Cabinets....","Updating Cabinets")
+	
+	F.Intrinsic.String.Build("Select * From Order_Lines Where Order_No = '{0}' And Record_No > '0000' And Product_Line = 'MC' And Flag_Bom = 'Y';",V.Global.sOrderNo,V.Local.sSQL)
+	F.Data.DataTable.CreateFromSQL("dtTopLevels","con",V.Local.sSQL,True)
+	F.Intrinsic.UI.ChangeWaitStatus("Checking Top Level Parts....",V.Local.iCnt,0,V.DataTable.dtTopLevels.RowCount)
+	F.Intrinsic.Control.For(V.Local.iCnt,0,V.DataTable.dtTopLevels.RowCount--,1)
+		F.Intrinsic.UI.ChangeWaitStatus("Updating Top Level Parts....",V.Local.iCnt,0,V.DataTable.dtTopLevels.RowCount)
+		F.Intrinsic.String.Build("Select * From Order_Lines Where Order_No = '{0}' And Record_No = '{1}';",V.Global.sOrderNo,V.DataTable.dtTopLevels(V.Local.iCnt).Record_No!FieldVal,V.Local.sSQL)
+		F.Data.DataTable.CreateFromSQL("dtSave","con",V.Local.sSQL,True)
+		'Get Summed Values
+		F.Intrinsic.String.Build("Select Order_No,Bom_Parent,Sum(Extension) As Extension,Sum(Extension_Order) As Extension_Order,Sum(Price) As Price,Sum(Cost) As Cost,Sum(Discount_Price) As Discount_Price,Sum(Price_Order) As Price_Order,Sum(Price_Disc_Ord) As Price_Disc_Ord,Cast(((Sum(Price)-Sum(Cost))/Sum(Price))*100 As Numeric(7,4)) As Margin From Order_Lines Where Order_No = '{0}' And Record_No > '0000' And Bom_Parent = '{1}' Group By Order_No,Bom_Parent;",V.Global.sOrderNo,V.DataTable.dtTopLevels(V.Local.iCnt).Record_No!FieldVal,V.Local.sSQL)
+		F.Data.DataTable.CreateFromSQL("dtSum","con",V.Local.sSQL,True)
+		F.Intrinsic.Control.If(V.DataTable.dtSum.RowCount,<>,0)
+			'Set Values to Top Levels
+			F.Data.DataTable.SetValue("dtSave",0,"Price",V.DataTable.dtSum(0).Extension!FieldVal,"Cost",V.DataTable.dtSum(0).Cost!FieldVal,"Extension",V.DataTable.dtSum(0).Extension!FieldVal,"Discount_Price",V.DataTable.dtSum(0).Extension!FieldVal,"Price_Order",V.DataTable.dtSum(0).Price_Order!FieldVal,"Price_Disc_Ord",V.DataTable.dtSum(0).Extension_Order!FieldVal,"Extension_Order",V.DataTable.dtSum(0).Extension_Order!FieldVal,"Margin",V.DataTable.dtSum(0).Margin!FieldVal)
+			'F.Data.DataTable.SetValue("dtSave",0,"Price",V.DataTable.dtSum(0).Price!FieldVal,"Cost",V.DataTable.dtSum(0).Cost!FieldVal,"Extension",V.DataTable.dtSum(0).Extension!FieldVal,"Discount_Price",V.DataTable.dtSum(0).Discount_Price!FieldVal,"Price_Order",V.DataTable.dtSum(0).Price_Order!FieldVal,"Price_Disc_Ord",V.DataTable.dtSum(0).Price_Disc_Ord!FieldVal,"Extension_Order",V.DataTable.dtSum(0).Extension_Order!FieldVal,"Margin",V.DataTable.dtSum(0).Margin!FieldVal)
+			'Delete Lines
+			F.Intrinsic.String.Build("Delete From Order_Lines Where Order_No = '{0}' And Record_No > '0000' And Bom_Parent = '{1}';",V.Global.sOrderNo,V.DataTable.dtTopLevels(V.Local.iCnt).Record_No!FieldVal,V.Local.sSQL)
+			F.ODBC.Connection!con.Execute(V.Local.sSQL)
+			'Saving Changes to Database
+			F.Data.DataTable.SaveToDB("dtSave","con","ORDER_LINES","ORDER_NO*!*RECORD_NO*!*ORDER_SHIP_ID")
+		F.Intrinsic.Control.EndIf
+		F.Data.DataTable.Close("dtSum")
+		F.Data.DataTable.Close("dtSave")
+	F.Intrinsic.Control.Next(V.Local.iCnt)
+	F.Intrinsic.UI.ChangeWaitStatus("Complete....",V.Local.iCnt,0,V.DataTable.dtTopLevels.RowCount)
+	F.Intrinsic.UI.CloseWaitDialog
+	F.Data.DataTable.Close("dtTopLevels")
+	F.Intrinsic.UI.Msgbox("Complete","Update Cabinets")
+	
+	F.ODBC.Connection!con.Close
+	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.UpdateCabinets.End
+
+Program.Sub.UpdateOrderNo.Start
+	F.Intrinsic.Control.Try
+	V.Local.sError.Declare
+
+	V.Local.sSQL.Declare
+	
+	F.ODBC.Connection!con.OpenCompanyConnection(500)
+	
+	F.Intrinsic.String.Build("Update GAB_4812_BOM_CFGSUBS Set Order_No = '{0}' Where Quote_No = '{1}';",V.Passed.ORDER,V.Passed.QUOTE,V.Local.sSQL)
+	F.ODBC.Connection!con.Execute(V.Local.sSQL)
+	
+	F.ODBC.Connection!con.Close
+
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.UpdateOrderNo.End
+
+Program.Sub.GenerateWOs.Start
+	F.Intrinsic.Control.Try
+	V.Local.sError.Declare
+
+	V.Local.sSQL.Declare
+	V.Local.iCnt.Declare
+	V.Local.iCnt2.Declare
+	V.Local.sParams.Declare
+	V.Local.sRet.Declare
+	V.Local.sRet2.Declare
+	V.Local.sRet3.Declare
+	V.Local.sRet4.Declare
+	V.Local.sSelect.Declare
+	
+	F.ODBC.Connection!con.OpenCompanyConnection(500)
+	
+	F.Intrinsic.UI.InvokeWaitDialog("Saving Original BOMs....","Generating Work Orders")
+	
+	'Open Blank Bom DataTables
+	F.Data.DataTable.CreateFromSQL("dtBomMstrOriginal","con","Select * From Bom_Mstr Where Parent = '-1';",True)
+	F.Data.DataTable.CreateFromSQL("dtBomEngOriginal","con","Select * From Bom_Eng Where Part = '-1';",True)
+	
+	F.Intrinsic.String.Build("Select A.Order_No,A.Record_No,B.Job,B.Suffix,A.Flag_Bom,A.Bom_Parent,A.User_2 As Parent_Line,A.Location From V_Order_Lines A Left Join V_Order_To_WO B On A.Order_No = B.Order_No And A.Record_No = B.Order_Line Where A.Order_No = '{0}' And A.Flag_Bom <> 'C';",V.Global.sOrderNo,V.Local.sSQL)
+	F.Data.DataTable.CreateFromSQL("dtWOs","con",V.Local.sSQL,True)
+	F.Intrinsic.Control.For(V.Local.iCnt,0,V.DataTable.dtWOs.RowCount--,1)
+		F.Intrinsic.UI.ChangeWaitStatus("Updating BOM Configurations....",V.Local.iCnt,0,V.DataTable.dtWOs.RowCount)
+		F.Intrinsic.Control.If(V.DataTable.dtWOs(V.Local.iCnt).Job!FieldValIsNull)
+			F.Intrinsic.Control.If(V.DataTable.dtWO(V.Local.iCnt).Flag_Bom!FieldValTrim,=,"N")
+				'Schedule WO
+				F.Intrinsic.UI.ChangeWaitStatus("Scheduling WO....",V.Local.iCnt,0,V.DataTable.dtWO.RowCount)
+				F.Intrinsic.String.ConcatCallWrapperArgs("O",V.Global.sOrderNo,V.DataTable.dtWO(V.Local.iCnt).Record_No!FieldValTrim,"1","1",V.Local.sParams)
+				F.Global.General.CallWrapperSync(200802,V.Local.sParams)
+			F.Intrinsic.Control.Else
+				'Loop through Bom Config layouts and save replacing original Boms
+				F.Intrinsic.String.Build("Select * From GAB_4812_BOM_CFGSUBS Where Order_No = '{0}' And Parent_Line = '{1}';",V.Global.sOrderNo,V.DataTable.dtWOs(V.Local.iCnt).Parent_Line!FieldValTrim,V.Local.sSQL)
+				F.Data.DataTable.CreateFromSQL("dtBomCfg","con",V.Local.sSQL,True)
+				F.Intrinsic.Control.If(V.DataTable.dtBomCfg.RowCount,<>,0)
+					F.Intrinsic.Control.For(V.Local.iCnt2,0,V.DataTable.dtBomCfg.RowCount--,1)
+						F.Intrinsic.Control.If(V.DataTable.dtBomCfg(V.Local.iCnt2).Bom_Seq!FieldVal,=,"0000")
+							'Bom_Mstr
+							F.Intrinsic.String.Build("Select * From Bom_Mstr Where Parent = '{0}';",V.DataTable.dtBomCfg(V.Local.iCnt2).Part_Orig!FieldVal,V.Local.sSQL)
+							F.Data.DataTable.CreateFromSQL("dtBomMstr","con",V.Local.sSQL,True)
+							F.Data.DataTable.Merge("dtBomMstr","dtBomMstrOriginal",True,3)
+							F.Data.DataTable.Close("dtBomMstr")
+							F.Intrinsic.String.Build("Delete From Bom_Mstr Where Parent = '{0}' And Sequence_Bom <> '0000';",V.DataTable.dtBomCfg(V.Local.iCnt2).Part_Orig!FieldVal,V.Local.sSQL)
+							F.ODBC.Connection!con.Execute(V.Local.sSQL)
+						F.Intrinsic.Control.Else
+							'Update BOM_MSTR
+							F.Intrinsic.String.Build("Select * From Bom_Mstr Where Parent = '{0}' And Sequence_Bom = '{1}' And Part = '{2}';",V.DataTable.dtBomCfg(V.Local.iCnt2).Parent!FieldVal,V.DataTable.dtBomCfg(V.Local.iCnt2).Bom_Seq!FieldVal,V.DataTable.dtBomCfg(V.Local.iCnt2).Part_Orig!FieldVal,V.Local.sSQL)
+							F.Data.DataTable.CreateFromSQL("dtBomMstr","con",V.Local.sSQL,True)
+							F.Intrinsic.Control.If(V.DataTable.dtBomMstr.RowCount,<>,0)
+								F.Data.DataTable.SetValue("dtBomMstr",-1,"Part",V.DataTable.dtBomCfg(V.Local.iCnt2).Part_Sub!FieldVal)
+							F.Intrinsic.Control.Else
+								F.Intrinsic.String.Build("Select Cost From Inventory_Cost Where Part = '{0}' And Locn = '{1}';",V.DataTable.dtBomCfg(V.Local.iCnt2).Part_Sub!FieldVal,V.DataTable.dtWOs(V.Local.iCnt).Location!FieldValTrim,V.Local.sSQL)
+								F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sRet)
+								F.Intrinsic.Control.If(V.Ambient.ExecuteAndReturnEOF)
+									V.Local.sRet.Set(0)
+								F.Intrinsic.Control.EndIf
+								F.Intrinsic.String.Build("Select UM_Inventory From Inventory_Mstr Where Part = '{0}' And Location = '{1}';",V.DataTable.dtBomCfg(V.Local.iCnt2).Part_Sub!FieldVal,V.DataTable.dtWOs(V.Local.iCnt).Location!FieldValTrim,V.Local.sSQL)
+								F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sRet2)
+								F.Intrinsic.Control.If(V.Ambient.ExecuteAndReturnEOF)
+									V.Local.sRet2.Set(0)
+								F.Intrinsic.Control.EndIf
+								F.Intrinsic.String.Build("Select Code_Source From Inventory_Mst2 Where Part = '{0}' And Location = '{1}';",V.DataTable.dtBomCfg(V.Local.iCnt2).Part_Sub!FieldVal,V.DataTable.dtWOs(V.Local.iCnt).Location!FieldValTrim,V.Local.sSQL)
+								F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sRet3)
+								F.Intrinsic.Control.If(V.Ambient.ExecuteAndReturnEOF)
+									V.Local.sRet3.Set(0)
+								F.Intrinsic.Control.EndIf
+								F.Intrinsic.String.Build("Select Description From Inventory_Mstr Where Part = '{0}' And Location = '{1}';",V.DataTable.dtBomCfg(V.Local.iCnt2).Part_Sub!FieldVal,V.DataTable.dtWOs(V.Local.iCnt).Location!FieldValTrim,V.Local.sSQL)
+								F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sRet4)
+								F.Intrinsic.Control.If(V.Ambient.ExecuteAndReturnEOF)
+									V.Local.sRet4.Set("")
+								F.Intrinsic.Control.EndIf
+								F.Data.DataTable.AddRow("dtBomMstr","Parent",V.DataTable.dtBomCfg(V.Local.iCnt2).Parent!FieldValTrim,"Sequence_Bom",V.DataTable.dtBomCfg(V.Local.iCnt2).Bom_Seq!FieldVal,"Insert_Bom","00","Date_Maintenance",V.Ambient.Date.FormatMMDDYY,"Cost",V.Local.sRet.Trim,"Quantity",V.DataTable.dtBomCfg(V.Local.iCnt2).Qty!FieldVal,"Part",V.DataTable.dtBomCfg(V.Local.iCnt2).Part_Sub!FieldVal,"Date_Start","000000","Date_Stop","000000","UM_Inventory",V.Local.sRet2.Trim,"Ordr_Usr_Flag","N","Quantity_6",V.DataTable.dtBomCfg(V.Local.iCnt2).Qty_6!FieldVal,"Source",V.Local.sRet3.Trim,"Frequency","0","Date_Last_Chg",V.Ambient.Date.FormatYYYYMMDD,"Time_Last_Chg","00000000","Last_Chg_By",V.Caller.User,"Last_Chg_Prog","ARC4812","Req_Trace","N","Cost_Date","00000000","Bom_Complete","Y","Inactive",False,"Chg_Rev","0","Setup_Qty","0.0000")
+							F.Intrinsic.Control.EndIf
+							F.Data.DataTable.SaveToDB("dtBomMstr","con","Bom_Mstr","Parent*!*Sequence_Bom*!*Insert_Bom")
+							F.Data.DataTable.Close("dtBomMstr")
+							'Update BOM_ENG
+							F.Intrinsic.String.Build("Select * From Bom_Eng Where Part = '{0}';",V.DataTable.dtBomCfg(V.Local.iCnt2).Part_Orig!FieldVal,V.Local.sSQL)
+							F.Data.DataTable.CreateFromSQL("dtBomEng","con",V.Local.sSQL,True)
+							F.Data.DataTable.Merge("dtBomEng","dtBomEngOriginal",True,3)
+							F.Data.DataTable.SetValue("dtBomEng",-1,"Part",V.DataTable.dtBomCfg(V.Local.iCnt2).Part_Sub!FieldVal,"Description",v.Local.sRet4)
+							F.Data.DataTable.SaveToDB("dtBomEng","con","Bom_Eng","Part*!*Location")
+							F.Data.DataTable.Close("dtBomEng")
+						F.Intrinsic.Control.EndIf
+					F.Intrinsic.Control.Next(V.Local.iCnt2)
+					F.Data.DataTable.Close("dtBomCfg")
+				F.Intrinsic.Control.EndIf
+				'Schedule WO
+				F.Intrinsic.UI.ChangeWaitStatus("Scheduling WO....",V.Local.iCnt,0,V.DataTable.dtWO.RowCount)
+				F.Intrinsic.String.ConcatCallWrapperArgs("O",V.Global.sOrderNo,V.DataTable.dtWO(V.Local.iCnt).Record_No!FieldValTrim,"1","1",V.Local.sParams)
+				F.Global.General.CallWrapperSync(200802,V.Local.sParams)
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.Next(V.Local.iCnt)
+	
+	'Put Original BOM back
+	F.Intrinsic.UI.ChangeWaitStatus("Saving Original BOMs....",V.Local.iCnt,0,V.DataTable.dtWOs.RowCount)
+	F.Data.DataTable.Select("dtBomMstrOriginal","Sequence_Bom = '0000'",V.Local.sSelect)
+	F.Intrinsic.Control.If(V.Local.sSelect,<>,"***NORETURN***")
+		F.Intrinsic.String.Split(V.Local.sSelect,"*!*",V.Local.sSelect)
+		F.Intrinsic.Control.For(V.Local.iCnt,0,V.Local.sSelect.UBound,1)
+			F.Intrinsic.String.Build("Delete From Bom_Mstr Where Parent = '{0}';",V.DataTable.dtBomMstrOriginal(V.Local.iCnt).Parent!FieldVal,V.Local.sSQL)
+			F.ODBC.Connection!con.Execute(V.Local.sSQL)
+		F.Intrinsic.Control.Next(V.Local.iCnt)
+		F.Data.DataTable.SaveToDB("dtBomMstrOriginal","con","Bom_Mstr","Parent*!*Sequence_Bom*!*Insert_Bom",256)
+		F.Data.DataTable.SaveToDB("dtBomEngOriginal","con","Bom_Eng","Part*!*Location",256)
+	F.Intrinsic.Control.EndIf
+	F.Data.DataTable.Close("dtBomMstrOriginal")
+	F.Data.DataTable.Close("dtBomEngOriginal")
+	
+	F.Intrinsic.UI.ChangeWaitStatus("Complete....",V.Local.iCnt,0,V.DataTable.dtWOs.RowCount)
+	F.Intrinsic.UI.CloseWaitDialog
+	F.Intrinsic.UI.Msgbox("Complete","Work Orders Generated")
+	
+	F.ODBC.Connection!con.Close
+	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.GenerateWOs.End
+
+Program.Sub.GenerateWO.Start
+	F.Intrinsic.Control.Try
+	V.Local.sError.Declare
+
+	V.Local.sSQL.Declare
+	V.Local.iCnt.Declare
+	V.Local.iCnt2.Declare
+	V.Local.sParams.Declare
+	V.Local.sRet.Declare
+	V.Local.sRet2.Declare
+	V.Local.sRet3.Declare
+	V.Local.sRet4.Declare
+	V.Local.sSelect.Declare
+	
+	F.ODBC.Connection!con.OpenCompanyConnection(500)
+	
+	F.Intrinsic.UI.InvokeWaitDialog("Saving Original BOMs....","Generating Work Order")
+	
+	'Open Blank Bom DataTables
+	F.Data.DataTable.CreateFromSQL("dtBomMstrOriginal","con","Select * From Bom_Mstr Where Parent = '-1';",True)
+	F.Data.DataTable.CreateFromSQL("dtBomEngOriginal","con","Select * From Bom_Eng Where Part = '-1';",True)
+	
+	F.Intrinsic.String.Build("Select A.Order_No,A.Record_No,B.Job,B.Suffix,A.Flag_Bom,A.Bom_Parent,A.User_2 As Parent_Line,A.Location From V_Order_Lines A Left Join V_Order_To_WO B On A.Order_No = B.Order_No And A.Record_No = B.Order_Line Where A.Order_No = '{0}' And A.Record_No = '{1}' And A.Flag_Bom <> 'C';",V.Global.sOrderNo,V.Global.sRecordNo,V.Local.sSQL)
+	F.Data.DataTable.CreateFromSQL("dtWO","con",V.Local.sSQL,True)
+	F.Intrinsic.Control.For(V.Local.iCnt,0,V.DataTable.dtWO.RowCount--,1)
+		F.Intrinsic.UI.ChangeWaitStatus("Updating BOM Configurations....",V.Local.iCnt,0,V.DataTable.dtWO.RowCount)
+		F.Intrinsic.Control.If(V.DataTable.dtWO(V.Local.iCnt).Job!FieldValIsNull)
+			F.Intrinsic.Control.If(V.DataTable.dtWO(V.Local.iCnt).Flag_Bom!FieldValTrim,=,"N")
+				'Schedule WO
+				F.Intrinsic.UI.ChangeWaitStatus("Scheduling WO....",V.Local.iCnt,0,V.DataTable.dtWO.RowCount)
+				F.Intrinsic.String.ConcatCallWrapperArgs("O",V.Global.sOrderNo,V.DataTable.dtWO(V.Local.iCnt).Record_No!FieldValTrim,"1","1",V.Local.sParams)
+				F.Global.General.CallWrapperSync(200802,V.Local.sParams)
+			F.Intrinsic.Control.Else
+				'Loop through Bom Config layouts and save replacing original Boms
+				F.Intrinsic.String.Build("Select * From GAB_4812_BOM_CFGSUBS Where Order_No = '{0}' And Parent_Line = '{1}';",V.Global.sOrderNo,V.DataTable.dtWO(V.Local.iCnt).Parent_Line!FieldValTrim,V.Local.sSQL)
+				F.Data.DataTable.CreateFromSQL("dtBomCfg","con",V.Local.sSQL,True)
+				F.Intrinsic.Control.If(V.DataTable.dtBomCfg.RowCount,<>,0)
+					F.Intrinsic.Control.For(V.Local.iCnt2,0,V.DataTable.dtBomCfg.RowCount--,1)
+						F.Intrinsic.Control.If(V.DataTable.dtBomCfg(V.Local.iCnt2).Bom_Seq!FieldVal,=,"0000")
+							'Bom_Mstr
+							F.Intrinsic.String.Build("Select * From Bom_Mstr Where Parent = '{0}';",V.DataTable.dtBomCfg(V.Local.iCnt2).Part_Orig!FieldVal,V.Local.sSQL)
+							F.Data.DataTable.CreateFromSQL("dtBomMstr","con",V.Local.sSQL,True)
+							F.Data.DataTable.Merge("dtBomMstr","dtBomMstrOriginal",True,3)
+							F.Data.DataTable.Close("dtBomMstr")
+							F.Intrinsic.String.Build("Delete From Bom_Mstr Where Parent = '{0}' And Sequence_Bom <> '0000';",V.DataTable.dtBomCfg(V.Local.iCnt2).Part_Orig!FieldVal,V.Local.sSQL)
+							F.ODBC.Connection!con.Execute(V.Local.sSQL)
+						F.Intrinsic.Control.Else
+							'Update BOM_MSTR
+							F.Intrinsic.String.Build("Select * From Bom_Mstr Where Parent = '{0}' And Sequence_Bom = '{1}' And Part = '{2}';",V.DataTable.dtBomCfg(V.Local.iCnt2).Parent!FieldVal,V.DataTable.dtBomCfg(V.Local.iCnt2).Bom_Seq!FieldVal,V.DataTable.dtBomCfg(V.Local.iCnt2).Part_Orig!FieldVal,V.Local.sSQL)
+							F.Data.DataTable.CreateFromSQL("dtBomMstr","con",V.Local.sSQL,True)
+							F.Intrinsic.Control.If(V.DataTable.dtBomMstr.RowCount,<>,0)
+								F.Data.DataTable.SetValue("dtBomMstr",-1,"Part",V.DataTable.dtBomCfg(V.Local.iCnt2).Part_Sub!FieldVal)
+							F.Intrinsic.Control.Else
+								F.Intrinsic.String.Build("Select Cost From Inventory_Cost Where Part = '{0}' And Locn = '{1}';",V.DataTable.dtBomCfg(V.Local.iCnt2).Part_Sub!FieldVal,V.DataTable.dtWO(V.Local.iCnt).Location!FieldValTrim,V.Local.sSQL)
+								F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sRet)
+								F.Intrinsic.Control.If(V.Ambient.ExecuteAndReturnEOF)
+									V.Local.sRet.Set(0)
+								F.Intrinsic.Control.EndIf
+								F.Intrinsic.String.Build("Select UM_Inventory From Inventory_Mstr Where Part = '{0}' And Location = '{1}';",V.DataTable.dtBomCfg(V.Local.iCnt2).Part_Sub!FieldVal,V.DataTable.dtWO(V.Local.iCnt).Location!FieldValTrim,V.Local.sSQL)
+								F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sRet2)
+								F.Intrinsic.Control.If(V.Ambient.ExecuteAndReturnEOF)
+									V.Local.sRet2.Set(0)
+								F.Intrinsic.Control.EndIf
+								F.Intrinsic.String.Build("Select Code_Source From Inventory_Mst2 Where Part = '{0}' And Location = '{1}';",V.DataTable.dtBomCfg(V.Local.iCnt2).Part_Sub!FieldVal,V.DataTable.dtWO(V.Local.iCnt).Location!FieldValTrim,V.Local.sSQL)
+								F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sRet3)
+								F.Intrinsic.Control.If(V.Ambient.ExecuteAndReturnEOF)
+									V.Local.sRet3.Set(0)
+								F.Intrinsic.Control.EndIf
+								F.Intrinsic.String.Build("Select Description From Inventory_Mstr Where Part = '{0}' And Location = '{1}';",V.DataTable.dtBomCfg(V.Local.iCnt2).Part_Sub!FieldVal,V.DataTable.dtWO(V.Local.iCnt).Location!FieldValTrim,V.Local.sSQL)
+								F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sRet4)
+								F.Intrinsic.Control.If(V.Ambient.ExecuteAndReturnEOF)
+									V.Local.sRet4.Set("")
+								F.Intrinsic.Control.EndIf
+								F.Data.DataTable.AddRow("dtBomMstr","Parent",V.DataTable.dtBomCfg(V.Local.iCnt2).Parent!FieldValTrim,"Sequence_Bom",V.DataTable.dtBomCfg(V.Local.iCnt2).Bom_Seq!FieldVal,"Insert_Bom","00","Date_Maintenance",V.Ambient.Date.FormatMMDDYY,"Cost",V.Local.sRet.Trim,"Quantity",V.DataTable.dtBomCfg(V.Local.iCnt2).Qty!FieldVal,"Part",V.DataTable.dtBomCfg(V.Local.iCnt2).Part_Sub!FieldVal,"Date_Start","000000","Date_Stop","000000","UM_Inventory",V.Local.sRet2.Trim,"Ordr_Usr_Flag","N","Quantity_6",V.DataTable.dtBomCfg(V.Local.iCnt2).Qty_6!FieldVal,"Source",V.Local.sRet3.Trim,"Frequency","0","Date_Last_Chg",V.Ambient.Date.FormatYYYYMMDD,"Time_Last_Chg","00000000","Last_Chg_By",V.Caller.User,"Last_Chg_Prog","ARC4812","Req_Trace","N","Cost_Date","00000000","Bom_Complete","Y","Inactive",False,"Chg_Rev","0","Setup_Qty","0.0000")
+							F.Intrinsic.Control.EndIf
+							F.Data.DataTable.SaveToDB("dtBomMstr","con","Bom_Mstr","Parent*!*Sequence_Bom*!*Insert_Bom")
+							F.Data.DataTable.Close("dtBomMstr")
+							'Update BOM_ENG
+							F.Intrinsic.String.Build("Select * From Bom_Eng Where Part = '{0}';",V.DataTable.dtBomCfg(V.Local.iCnt2).Part_Orig!FieldVal,V.Local.sSQL)
+							F.Data.DataTable.CreateFromSQL("dtBomEng","con",V.Local.sSQL,True)
+							F.Data.DataTable.Merge("dtBomEng","dtBomEngOriginal",True,3)
+							F.Data.DataTable.SetValue("dtBomEng",-1,"Part",V.DataTable.dtBomCfg(V.Local.iCnt2).Part_Sub!FieldVal,"Description",v.Local.sRet4)
+							F.Data.DataTable.SaveToDB("dtBomEng","con","Bom_Eng","Part*!*Location")
+							F.Data.DataTable.Close("dtBomEng")
+						F.Intrinsic.Control.EndIf
+					F.Intrinsic.Control.Next(V.Local.iCnt2)
+					F.Data.DataTable.Close("dtBomCfg")
+				F.Intrinsic.Control.EndIf
+				'Schedule WO
+				F.Intrinsic.UI.ChangeWaitStatus("Scheduling WO....",V.Local.iCnt,0,V.DataTable.dtWO.RowCount)
+				F.Intrinsic.String.ConcatCallWrapperArgs("O",V.Global.sOrderNo,V.DataTable.dtWO(V.Local.iCnt).Record_No!FieldValTrim,"1","1",V.Local.sParams)
+				F.Global.General.CallWrapperSync(200802,V.Local.sParams)
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.Next(V.Local.iCnt)
+	
+	'Put Original BOM back
+	F.Intrinsic.UI.ChangeWaitStatus("Saving Original BOMs....",V.Local.iCnt,0,V.DataTable.dtWO.RowCount)
+	F.Data.DataTable.Select("dtBomMstrOriginal","Sequence_Bom = '0000'",V.Local.sSelect)
+	F.Intrinsic.Control.If(V.Local.sSelect,<>,"***NORETURN***")
+		F.Intrinsic.String.Split(V.Local.sSelect,"*!*",V.Local.sSelect)
+		F.Intrinsic.Control.For(V.Local.iCnt,0,V.Local.sSelect.UBound,1)
+			F.Intrinsic.String.Build("Delete From Bom_Mstr Where Parent = '{0}';",V.DataTable.dtBomMstrOriginal(V.Local.iCnt).Parent!FieldVal,V.Local.sSQL)
+			F.ODBC.Connection!con.Execute(V.Local.sSQL)
+		F.Intrinsic.Control.Next(V.Local.iCnt)
+		F.Data.DataTable.SaveToDB("dtBomMstrOriginal","con","Bom_Mstr","Parent*!*Sequence_Bom*!*Insert_Bom",256)
+		F.Data.DataTable.SaveToDB("dtBomEngOriginal","con","Bom_Eng","Part*!*Location",256)
+	F.Intrinsic.Control.EndIf
+	F.Data.DataTable.Close("dtBomMstrOriginal")
+	F.Data.DataTable.Close("dtBomEngOriginal")
+	
+	F.Intrinsic.UI.ChangeWaitStatus("Complete....",V.Local.iCnt,0,V.DataTable.dtWO.RowCount)
+	F.Intrinsic.UI.CloseWaitDialog
+	F.Intrinsic.UI.Msgbox("Complete","Work Order Generated")
+	
+	F.ODBC.Connection!con.Close
+	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.GenerateWO.End
