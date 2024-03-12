@@ -1,0 +1,382 @@
+Program.Sub.ScreenSU.Start
+Gui.frmSetup..Create
+Gui.frmSetup..Size(8145,5625)
+Gui.frmSetup..MinX(0)
+Gui.frmSetup..MinY(0)
+Gui.frmSetup..Position(0,0)
+Gui.frmSetup..BackColor(-2147483633)
+Gui.frmSetup..MousePointer(0)
+Gui.frmSetup..Event(UnLoad,frmSetup_UnLoad)
+Gui.frmSetup..Caption("BOM Configurator Setup")
+Gui.frmSetup.GsGCSetup.Create(GsGridControl)
+Gui.frmSetup.GsGCSetup.Size(7980,3630)
+Gui.frmSetup.GsGCSetup.Position(0,1305)
+Gui.frmSetup.GsGCSetup.TabStop(True)
+Gui.frmSetup.GsGCSetup.TabIndex(3)
+Gui.frmSetup.GsGCSetup.Event(RowCellClick,GsGCSetup_RowCellClick)
+Gui.frmSetup.cmdSave.Create(Button)
+Gui.frmSetup.cmdSave.Size(855,375)
+Gui.frmSetup.cmdSave.Position(7125,4950)
+Gui.frmSetup.cmdSave.Caption("Save")
+Gui.frmSetup.cmdSave.Event(Click,cmdSave_Click)
+Gui.frmSetup.cmdSave.TabStop(True)
+Gui.frmSetup.cmdSave.TabIndex(4)
+Gui.frmSetup.cboParent.Create(ComboBox)
+Gui.frmSetup.cboParent.Size(2535,330)
+Gui.frmSetup.cboParent.Position(30,300)
+Gui.frmSetup.cboParent.Event(LostFocus,cboParent_LostFocus)
+Gui.frmSetup.cboParent.TabStop(True)
+Gui.frmSetup.cboParent.TabIndex(1)
+Gui.frmSetup.lblParent.Create(Label,"Parent",True,1935,255,0,30,90,True,0,"Arial",8,-2147483633,0)
+Gui.frmSetup.lblComponent.Create(Label,"Component",True,1935,255,0,30,705,True,0,"Arial",8,-2147483633,0)
+Gui.frmSetup.cboComponent.Create(ComboBox)
+Gui.frmSetup.cboComponent.Size(2535,330)
+Gui.frmSetup.cboComponent.Position(30,915)
+Gui.frmSetup.cboComponent.Event(LostFocus,cboComponent_LostFocus)
+Gui.frmSetup.cboComponent.TabStop(True)
+Gui.frmSetup.cboComponent.TabIndex(2)
+Gui.frmSetup.cboComponent.Event(Click,cboComponent_LostFocus)
+Gui.frmSetup.txtParentDesc.Create(TextBox,"",True,3675,300,0,2670,300,True,0,"Arial",8,-2147483643,1)
+Gui.frmSetup.txtParentDesc.Locked(True)
+Gui.frmSetup.txtCompDesc.Create(TextBox,"",True,3675,300,0,2670,915,True,0,"Arial",8,-2147483643,1)
+Gui.frmSetup.txtCompDesc.Locked(True)
+Gui.frmSetup.lblParentDesc.Create(Label,"Parent Description",True,1935,255,0,2670,90,True,0,"Arial",8,-2147483633,0)
+Gui.frmSetup.lblCompDesc.Create(Label,"Component Description",True,1935,255,0,2670,705,True,0,"Arial",8,-2147483633,0)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+	V.Global.bLoad.Declare
+	V.Global.sParent.Declare
+	V.Global.sComponent.Declare
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+	F.Intrinsic.Control.Try
+	V.Local.sError.Declare
+	
+	V.Local.sIcon.Declare
+
+	F.Intrinsic.String.Build("{0}\gss2.ico",V.Caller.GasDir,v.Local.sIcon)		
+	Gui.frmSetup..Icon(v.Local.sIcon)
+	
+	F.ODBC.Connection!con.OpenCompanyConnection(300)
+	F.Intrinsic.Control.BlockEvents
+	F.Intrinsic.Control.CallSub(CheckTable)
+	F.Intrinsic.Control.CallSub(SetAnchors)
+	F.Intrinsic.Control.CallSub(SetContextMenus)
+	F.Intrinsic.Control.CallSub(LoadComboBoxes)
+	
+	Gui.frmSetup..Show
+	Gui.frmSetup.cboParent.SetFocus
+	F.Intrinsic.Control.UnBlockEvents
+	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.frmSetup_UnLoad.Start
+	F.Intrinsic.Control.Try
+	V.Local.sError.Declare
+	
+	F.ODBC.Connection!con.Close
+	F.Intrinsic.Control.End
+	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.frmSetup_UnLoad.End
+
+Program.Sub.CheckTable.Start
+	F.Intrinsic.Control.Try
+	V.Local.sError.Declare
+	
+	V.Local.bExists.Declare
+	
+	F.ODBC.Connection!con.TableExists("GAB_4812_BOM_CONFIG",V.Local.bExists)
+	F.Intrinsic.Control.If(V.Local.bExists,=,False)
+		F.ODBC.Connection!con.Execute("CREATE TABLE GAB_4812_BOM_CONFIG(CID IDENTITY,PARENT CHAR(20),COMPONENT CHAR(20),OPTIONS CHAR(20),PRIMARY KEY (CID));")
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.CheckTable.End
+
+Program.Sub.SetAnchors.Start
+	F.Intrinsic.Control.Try
+	V.Local.sError.Declare
+	
+	Gui.frmSetup.GsGCSetup.Anchor(15)
+	Gui.frmSetup.cmdSave.Anchor(10)
+	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.SetAnchors.End
+
+Program.Sub.LoadComboBoxes.Start
+	F.Intrinsic.Control.Try
+	V.Local.sError.Declare
+	
+	'Parents
+	F.Data.DataTable.CreateFromSQL("dtParent","con","Select Distinct RTrim(Parent) As Parent From Bom_Mstr Order By Parent;",True)
+	Gui.frmSetup.cboParent.AddItems("DataTable","dtParent","Parent","Parent")
+
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.LoadComboBoxes.End
+
+Program.Sub.cboParent_LostFocus.Start
+	F.Intrinsic.Control.Try
+	V.Local.sError.Declare
+	
+	V.Local.sSQL.Declare
+	V.Local.sParent.Declare
+	V.Local.sParentDesc.Declare
+	
+	V.Local.sParent.Set(V.Screen.frmSetup!cboParent.Text)
+	Gui.frmSetup.cboParent.Text(V.Local.sParent.UCase)
+	
+	F.Intrinsic.Control.If(V.Global.bLoad)
+	F.Intrinsic.Control.AndIf(V.Global.sParent,=,V.Local.sParent)
+		F.Intrinsic.Control.ExitSub
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.If(V.DataTable.dtComponent.Exists)
+		F.Data.DataTable.Close("dtComponent")
+	F.Intrinsic.Control.EndIf
+	
+	V.Local.sParent.Set(V.Screen.frmSetup!cboParent.Text)
+	Gui.frmSetup.cboParent.Text(V.Local.sParent.UCase)
+	
+	'Set Parent Desc
+	F.Intrinsic.String.Build("Select Top 1 RTrim(Description) From V_Inventory_Mstr Where Part = '{0}' Order By Part,Location;",V.Local.sParent.UCase,V.Local.sSQL)
+	F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sParentDesc)
+	Gui.frmSetup.txtParentDesc.Text(V.Local.sParentDesc)
+
+	'Component
+	F.Intrinsic.String.Build("Select Distinct RTrim(Part) As Part From Bom_Mstr Where Parent = '{0}' And Source In ('M','F','P','S') And Sequence_Bom <> '0000' Order By Sequence_Bom;",V.Local.sParent.UCase,V.Local.sSQL)
+	F.Data.DataTable.CreateFromSQL("dtComponent","con",V.Local.sSQL,True)
+	Gui.frmSetup.cboComponent.AddItems("DataTable","dtComponent","Part","Part")
+	
+	V.Global.bLoad.Set(False)
+	V.Global.sParent.Set(V.Local.sParent)
+
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.cboParent_LostFocus.End
+
+Program.Sub.cboComponent_LostFocus.Start
+	F.Intrinsic.Control.Try
+	V.Local.sError.Declare
+	
+	V.Local.sSQL.Declare
+	V.Local.sComponent.Declare
+	V.Local.sComponentDesc.Declare
+	
+	V.Local.sComponent.Set(V.Screen.frmSetup!cboComponent.Text)
+	Gui.frmSetup.cboComponent.Text(V.Local.sComponent.UCase)
+	
+	F.Intrinsic.Control.If(V.Global.bLoad)
+	F.Intrinsic.Control.AndIf(V.Global.sComponent,=,V.Local.sComponent)
+		F.Intrinsic.Control.ExitSub
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.If(V.DataTable.dtSetup.Exists)
+		F.Data.DataTable.Close("dtSetup")
+	F.Intrinsic.Control.EndIf
+	
+	'Set Component Desc
+	F.Intrinsic.String.Build("Select Top 1 RTrim(Description) From V_Inventory_Mstr Where Part = '{0}' Order By Part,Location;",V.Local.sComponent.UCase,V.Local.sSQL)
+	F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sComponentDesc)
+	Gui.frmSetup.txtCompDesc.Text(V.Local.sComponentDesc)
+	
+	F.Intrinsic.String.Build("Select CID,Parent,Component,RTrim(Options) As Options From GAB_4812_BOM_CONFIG Where Parent = '{0}' And Component = '{1}';",V.Global.sParent,V.Local.sComponent,V.Local.sSQL)
+	F.Data.DataTable.CreateFromSQL("dtSetup","con",V.Local.sSQL,True)
+	F.Data.DataTable.AddColumn("dtSetup","Description",String)
+	F.Data.DataTable.AddColumn("dtSetup","Opt_B",String)
+	
+	F.Data.Dictionary.CreateFromSQL("dDesc","con","Select Distinct RTrim(Part) As Part,RTrim(Description) As Description From V_Inventory_Mstr Order By Part;")
+	F.Data.Dictionary.SetDefaultReturn("dDesc","")
+	F.Data.DataTable.FillFromDictionary("dtSetup","dDesc","Options","Description")
+	F.Data.Dictionary.Close("dDesc")
+	
+	F.Intrinsic.Control.CallSub(LoadSetup)
+	
+	V.Global.bLoad.Set(True)
+	V.Global.sComponent.Set(V.Local.sComponent)
+	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.cboComponent_LostFocus.End
+
+Program.Sub.LoadSetup.Start
+	F.Intrinsic.Control.Try
+	V.Local.sError.Declare
+	
+	Gui.frmSetup.GsGCSetup.AddGridviewFromDatatable("gvSetup","dtSetup")
+	Gui.frmSetup.GsGCSetup.SuspendLayout()
+	Gui.frmSetup.GsGCSetup.SetGridviewProperty("gvSetup","MultiSelect",True)
+	Gui.frmSetup.GsGCSetup.SetGridviewProperty("gvSetup","AllowSort",True)
+	Gui.frmSetup.GsGCSetup.SetGridviewProperty("gvSetup","AllowFilter",True)
+	Gui.frmSetup.GsGCSetup.SetGridviewProperty("gvSetup","Editable",False)
+	Gui.frmSetup.GsGCSetup.SetGridviewProperty("gvSetup","ReadOnly",True)
+	Gui.frmSetup.GsGCSetup.SetGridviewProperty("gvSetup","ShowDetailTabs",False)
+	Gui.frmSetup.GsGCSetup.SetGridviewProperty("gvSetup","ShowGroupPanel",False)
+	Gui.frmSetup.GsGCSetup.SetGridviewProperty("gvSetup","EnableAppearanceOddRow",True)
+	
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","CID","Visible",False)
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","PARENT","Visible",False)
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","COMPONENT","Visible",False)
+	
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","Opt_B","ShowCaption",False)
+	
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","Opt_B","Icon","BROWSE")
+	
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","CID","Caption","CID")
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","PARENT","Caption","Parent")
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","COMPONENT","Caption","Component")
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","OPTIONS","Caption","Option(s)")
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","Description","Caption","Description")
+	
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","CID","MinWidth","40")
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","PARENT","MinWidth","100")
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","COMPONENT","MinWidth","100")
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","OPTIONS","MinWidth","150")
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","Description","MinWidth","300")
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","Opt_B","MinWidth","15")
+	
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","CID","HeaderFontBold",True)
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","PARENT","HeaderFontBold",True)
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","COMPONENT","HeaderFontBold",True)
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","OPTIONS","HeaderFontBold",True)
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","Description","HeaderFontBold",True)
+	
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","CID","HeaderHAlignment","Center")
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","PARENT","HeaderHAlignment","Center")
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","COMPONENT","HeaderHAlignment","Center")
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","OPTIONS","HeaderHAlignment","Center")
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","Description","HeaderHAlignment","Center")
+	
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","CID","CellHAlignment","Center")
+	
+	Gui.frmSetup.GsGCSetup.MainView("gvSetup")
+	Gui.frmSetup.GsGCSetup.ResumeLayout()
+	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry	
+Program.Sub.LoadSetup.End
+
+Program.Sub.cmdSave_Click.Start
+	F.Intrinsic.Control.Try
+	V.Local.sError.Declare
+	
+	F.Data.DataTable.RemoveColumn("dtSetup","Description")
+	F.Data.DataTable.RemoveColumn("dtSetup","Opt_B")
+	F.Data.DataTable.SaveToDB("dtSetup","con","GAB_4812_BOM_CONFIG","CID")
+	V.Global.bLoad.Set(False)
+	F.Intrinsic.Control.CallSub(cboComponent_LostFocus)
+	Gui.frmSetup.GsGCSetup.SetFocus
+	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.cmdSave_Click.End
+
+Program.Sub.SetContextMenus.Start
+	F.Intrinsic.Control.Try
+	V.Local.sError.Declare
+	
+	Gui.frmSetup.GsGCSetup.SetFocus
+	Gui.frmSetup..ContextMenuCreate("ctxSetup")
+	Gui.frmSetup.GsGCSetup.ContextMenuAttach("ctxSetup")
+	Gui.frmSetup..ContextMenuAddItem("ctxSetup","Add",0,V.Translation.9602)
+	Gui.frmSetup..ContextMenuAddItem("ctxSetup","Delete",0,V.Translation.157901)
+	Gui.frmSetup..ContextMenuSetItemEventHandler("ctxSetup","Add","MenuClickAdd")
+	Gui.frmSetup..ContextMenuSetItemEventHandler("ctxSetup","Delete","MenuClickDelete")
+	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.SetContextMenus.End
+
+Program.Sub.MenuClickAdd.Start
+	F.Intrinsic.Control.Try
+	V.Local.sError.Declare
+	
+	F.Data.DataTable.AddRow("dtSetup","CID",0,"Parent",V.Screen.frmSetup!cboParent.Text,"Component",V.Screen.frmSetup!cboComponent.Text)
+	Gui.frmSetup.GsGCSetup.SetColumnProperty("gvSetup","Opt_B","Icon","BROWSE")
+	Gui.frmSetup.GsGCSetup.SetFocus
+	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.MenuClickAdd.End
+
+Program.Sub.MenuClickDelete.Start
+	F.Intrinsic.Control.Try
+	V.Local.sError.Declare
+	
+	V.Local.iRow.Declare
+	
+	Gui.frmSetup.GsGCSetup.GetSelectedRows("gvSetup",V.Local.iRow)
+	F.Data.DataTable.DeleteRow("dtSetup",V.Local.iRow)
+	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.MenuClickDelete.End
+
+Program.Sub.GsGCSetup_RowCellClick.Start
+	F.Intrinsic.Control.Try
+	V.Local.sError.Declare
+	
+	V.Local.sSql.Declare
+	V.Local.sRet.Declare
+	
+	Gui.frmSetup.GsGCSetup.SetFocus
+	F.Intrinsic.UI.SetBrowserHotTypeAhead(True)
+	F.Intrinsic.Control.SelectCase(V.Args.Column)
+		F.Intrinsic.Control.Case("Opt_B")
+			F.Intrinsic.UI.Browser("Inventory","con","Select Distinct RTrim(Part) As Part,RTrim(Description) As Description From V_Inventory_Mstr Order By Part,Location;","Part*!*Description","400*!*800",V.Local.sRet)
+			F.Intrinsic.Control.If(V.Local.sRet,<>,"***CANCEL***")
+				F.Intrinsic.String.Split(V.Local.sRet,"*!*",V.Local.sRet)
+				F.Data.DataTable.SetValue("dtSetup",V.Args.RowIndex,"Options",V.Local.sRet(0).Trim,"Description",V.Local.sRet(1).Trim)
+			F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.EndSelect
+	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.GsGCSetup_RowCellClick.End
